@@ -1,5 +1,7 @@
 # 夏夜草语 · Windows 桌面播放器
 
+[English](README_EN.md)
+
 用 Go 语言编写的 Windows 桌面音乐播放器。内嵌 **WebView2 内核**（非系统浏览器），启动本地 HTTP 服务器加载 `index.html` 及相关资源，全屏播放。
 
 ![效果展示](show.png)
