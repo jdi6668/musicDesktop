@@ -6,9 +6,9 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
+
+	"github.com/yuaotian/go-win-webview2"
 )
 
 // findFreePort 获取一个可用的本地端口
@@ -23,28 +23,6 @@ func findFreePort() (int, error) {
 	}
 	defer l.Close()
 	return l.Addr().(*net.TCPAddr).Port, nil
-}
-
-// openBrowserKiosk 以全屏(kiosk)模式打开默认浏览器
-func openBrowserKiosk(url string) error {
-	switch runtime.GOOS {
-	case "windows":
-		// 优先尝试 Edge，其次 Chrome，最后用默认浏览器
-		if path, err := exec.LookPath("msedge"); err == nil {
-			return exec.Command(path, "--kiosk", "--autoplay-policy=no-user-gesture-required", url).Start()
-		}
-		if path, err := exec.LookPath("chrome"); err == nil {
-			return exec.Command(path, "--kiosk", "--autoplay-policy=no-user-gesture-required", url).Start()
-		}
-		// 退而求其次：用默认浏览器打开（非 kiosk）
-		return exec.Command("cmd", "/c", "start", "", url).Start()
-	case "darwin":
-		// macOS: 用 Safari 全屏
-		return exec.Command("open", "-a", "Safari", url).Start()
-	default:
-		// Linux: 尝试 xdg-open
-		return exec.Command("xdg-open", url).Start()
-	}
 }
 
 func main() {
@@ -82,12 +60,30 @@ func main() {
 		}
 	}()
 
-	// 打开全屏浏览器
-	log.Printf("正在打开全屏浏览器...")
-	if err := openBrowserKiosk(url); err != nil {
-		log.Printf("无法自动打开浏览器，请手动访问: %s", url)
-	}
+	// 创建 WebView2 全屏窗口
+	w := webview2.NewWithOptions(webview2.WebViewOptions{
+		Debug:     false,
+		AutoFocus: true,
+		WindowOptions: webview2.WindowOptions{
+			Title:      "夏夜草语 · 助眠音乐",
+			Width:      1920,
+			Height:     1080,
+			Center:     true,
+			Frameless:  false,
+			Fullscreen: true,
+		},
+	})
+	defer w.Destroy()
 
-	// 阻塞主线程，保持服务器运行
-	select {}
+	// 注册退出热键 Ctrl+Alt+Q
+	w.RegisterHotKeyString("Ctrl+Alt+Q", func() {
+		log.Println("退出应用...")
+		w.Terminate()
+	})
+
+	// 导航到本地服务器
+	w.Navigate(url)
+
+	// 运行 WebView 消息循环（阻塞）
+	w.Run()
 }

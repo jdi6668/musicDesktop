@@ -1,18 +1,25 @@
 # 夏夜草语 · Windows 桌面播放器
 
-用 Go 语言编写的 Windows 桌面音乐播放器。启动本地 HTTP 服务器加载 `index.html` 及相关资源，并以全屏（Kiosk）模式打开浏览器播放。
+用 Go 语言编写的 Windows 桌面音乐播放器。内嵌 **WebView2 内核**（非系统浏览器），启动本地 HTTP 服务器加载 `index.html` 及相关资源，全屏播放。
 
 ## 项目结构
 
 ```
 musicDesk/
-├── main.go              # Go 主程序
+├── main.go              # Go 主程序（WebView2 全屏窗口）
 ├── go.mod               # Go 模块文件
+├── go.sum               # 依赖校验
 ├── index.html           # 播放器页面
 ├── heisemaoyi.mp3       # 音频文件
 ├── heisemaoyi.lrc       # 歌词文件
 └── favicon.ico          # 图标
 ```
+
+## 系统要求
+
+- **Windows 10+** 操作系统
+- **Go 1.16+**
+- **Microsoft Edge WebView2 Runtime**（Windows 10+ 通常已预装，如未安装请从 [微软官网](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) 下载）
 
 ## 编译与运行教程
 
@@ -20,67 +27,60 @@ musicDesk/
 
 从官网下载并安装 Go：https://go.dev/dl/
 
-安装完成后，打开命令提示符（CMD）或 PowerShell，验证安装：
+验证安装：
 
 ```bash
 go version
 ```
 
-应输出类似 `go version go1.21.x windows/amd64`。
-
-### 2. 编译
-
-在项目目录下执行：
+### 2. 安装依赖
 
 ```bash
 cd C:\Users\87411\Desktop\musicDesk
+go mod tidy
+```
+
+### 3. 编译
+
+```bash
 go build -o musicdesk.exe main.go
 ```
 
-编译完成后会生成 `musicdesk.exe`。
+编译完成后生成 `musicdesk.exe`。
 
-### 3. 运行
+### 4. 运行
 
-双击 `musicdesk.exe`，或在命令行中执行：
+双击 `musicdesk.exe`，或命令行执行：
 
 ```bash
 .\musicdesk.exe
 ```
 
 程序会：
-1. 自动查找一个可用的本地端口
+1. 自动查找可用本地端口
 2. 启动 HTTP 服务器托管当前目录下的所有文件
-3. 以全屏（Kiosk）模式打开浏览器加载播放页面
+3. 创建 **WebView2 全屏窗口** 加载播放页面
 
-### 4. 退出
+### 5. 退出
 
-- **Kiosk 模式**：按 `Alt + F4` 或 `Ctrl + W` 关闭浏览器窗口
-- **服务器**：在命令行窗口按 `Ctrl + C` 终止服务器进程
-
-## 跨平台编译
-
-如果需要在其他平台编译 Windows 版本：
-
-```bash
-# 在 Linux/macOS 上交叉编译 Windows 版本
-GOOS=windows GOARCH=amd64 go build -o musicdesk.exe main.go
-```
+按 `Ctrl + Alt + Q` 退出应用。
 
 ## 隐藏命令行窗口（可选）
 
-如果希望运行时不显示命令行黑窗口，可以编译为窗口模式：
+编译为无窗口模式（不显示黑色命令行窗口）：
 
 ```bash
 go build -ldflags "-H windowsgui" -o musicdesk.exe main.go
 ```
 
-> 注意：使用 `-H windowsgui` 后将看不到日志输出。如果需要调试，建议先用普通方式编译运行。
+> 调试时建议用普通方式编译，可以看到日志输出。
 
-## 浏览器说明
+## 技术说明
 
-- 程序优先使用 **Microsoft Edge** 的 Kiosk 模式
-- 如果未安装 Edge，则尝试 **Chrome**
-- 如果两者都未找到，则用系统默认浏览器打开（非全屏）
+- 使用 `github.com/yuaotian/go-win-webview2` 库，基于 **Microsoft Edge WebView2** 内核
+- 无需 CGO，纯 Go 调用 Windows API
+- 不依赖系统浏览器，内嵌 WebView2 渲染引擎
+- 支持音频自动播放（WebView2 不受浏览器自动播放策略限制）
 
 ## 自定义
 
