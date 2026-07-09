@@ -72,7 +72,14 @@ func main() {
 		w.Terminate()
 	})
 
-	// 页面加载完成后注入 ESC 监听
+	// 注册 ESC 全局热键退出（modifier=0, VK_ESCAPE=0x1B）
+	// WebView2 全屏模式会拦截 ESC，JS 监听不到，必须用全局热键
+	w.RegisterHotKey(0, 0x1B, func() {
+		log.Println("退出应用...")
+		w.Terminate()
+	})
+
+	// 页面加载完成后注入 ESC 监听（非全屏时的后备方案）
 	w.OnLoadingStateChanged(func(isLoading bool) {
 		if !isLoading {
 			w.Eval(`
