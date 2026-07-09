@@ -75,10 +75,23 @@ func main() {
 	})
 	defer w.Destroy()
 
-	// 注册退出热键 Ctrl+Alt+Q
-	w.RegisterHotKeyString("Ctrl+Alt+Q", func() {
+	// 绑定退出函数，供 JS 调用
+	w.Bind("exitApp", func() {
 		log.Println("退出应用...")
 		w.Terminate()
+	})
+
+	// 页面加载完成后注入 ESC 监听
+	w.OnLoadingStateChanged(func(isLoading bool) {
+		if !isLoading {
+			w.Eval(`
+				document.addEventListener('keydown', function(e) {
+					if (e.key === 'Escape') {
+						exitApp();
+					}
+				});
+			`)
+		}
 	})
 
 	// 导航到本地服务器
