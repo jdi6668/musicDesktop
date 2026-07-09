@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>夏夜草语 · 助眠音乐</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #050a08;
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
+  canvas { display: block; width: 100%; height: 100%; position: fixed; inset: 0; }
+
+  /* ---- 播放器卡片 ---- */
+  :root { --bass: 0; --mid: 0; }
+  #playerWrap {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    z-index: 10; transition: opacity 0.8s ease, transform 0.8s ease;
+    animation: floatCard 6s ease-in-out infinite;
+    will-change: transform;
+    perspective: 900px;
+  }
+  #playerWrap.hidden { opacity: 0; pointer-events: none; transform: translate(-50%, -50%) scale(0.94); }
+  @keyframes floatCard { 0%, 100% { margin-top: 0; } 50% { margin-top: -10px; } }
+  #player {
+    position: relative;
+    width: 340px; padding: 38px 32px 32px; text-align: center;
+    background: linear-gradient(165deg, rgba(18, 32, 24, 0.55), rgba(10, 20, 14, 0.5));
+    backdrop-filter: blur(24px) saturate(130%); -webkit-backdrop-filter: blur(24px) saturate(130%);
+    border: 1px solid rgba(120, 200, 140, 0.14);
+    border-radius: 28px;
+    box-shadow:
+      0 10px 70px rgba(10, 14, 34, 0.55),
+      0 0 0 1px rgba(255,255,255,0.03) inset,
+      0 0 90px rgba(100, 200, 120, calc(0.08 + var(--bass) * 0.30)),
+      0 0 50px rgba(180, 240, 160, calc(0.05 + var(--mid) * 0.20));
+    transition: box-shadow 0.15s ease, transform 0.35s ease;
+    transform-style: preserve-3d;
+    overflow: hidden;
+  }
+  #player::before {
+    content: ''; position: absolute; inset: -1px; border-radius: 28px; padding: 1px;
+    background: conic-gradient(from calc(var(--bass) * 360deg), #6bcf7f, #a8e6a0, #ffd56b, #6bcf7f);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    opacity: 0.35; pointer-events: none; z-index: 0;
+  }
+  #player::after {
+    content: ''; position: absolute; inset: 0; border-radius: 28px; pointer-events: none; z-index: 0;
+    background: radial-gradient(circle at 50% -10%, rgba(255,255,255,0.09), transparent 55%);
+  }
+  #player > * { position: relative; z-index: 1; }
+
+  /* 唱片 */
+  #disc {
+    width: 168px; height: 168px; border-radius: 50%; margin: 0 auto 26px;
+    background:
+      repeating-radial-gradient(circle, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 1px, transparent 2px, transparent 5px),
+      conic-gradient(from 0deg, #1a2e1e, #162e1e, #0f3a20, #1a2e1e);
+    position: relative;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.05),
+      0 8px 32px rgba(0,0,0,0.5),
+      0 0 calc(20px + var(--bass) * 50px) rgba(100, 200, 120, calc(0.20 + var(--bass) * 0.40)),
+      inset 0 0 24px rgba(0,0,0,0.65);
+    animation: spin 20s linear infinite;
+    animation-play-state: paused;
+    transition: box-shadow 0.15s ease;
+  }
+  #disc.playing { animation-play-state: running; }
+  #disc::before {
+    content: ''; position: absolute; inset: 32px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #3a5e3e 0%, #1a3e1e 60%, #0a1e0e 100%);
+    box-shadow: inset 0 0 12px rgba(0,0,0,0.6), inset 0 0 2px rgba(255,255,255,0.15);
+  }
+  #disc::after {
+    content: ''; position: absolute; left: 50%; top: 50%;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #a8e6a0; transform: translate(-50%, -50%);
+    box-shadow: 0 0 12px rgba(168, 230, 160, 0.6), 0 0 24px rgba(168, 230, 160, calc(0.3 + var(--bass) * 0.5));
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .song-title {
+    font-size: 19px; font-weight: 700; letter-spacing: 2px;
+    margin-bottom: 5px;
+    background: linear-gradient(90deg, #a8e6a0, #d4f0c0, #ffd56b, #a8e6a0);
+    background-size: 300% auto;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: titleShine 8s linear infinite;
+    filter: drop-shadow(0 0 16px rgba(120, 200, 130, 0.35));
+  }
+  @keyframes titleShine { to { background-position: -300% center; } }
+  .song-sub {
+    color: rgba(160, 220, 170, 0.4); font-size: 12px; letter-spacing: 3px;
+    margin-bottom: 24px;
+  }
+
+  /* 进度条 */
+  #track {
+    width: 100%; height: 6px; background: rgba(60, 100, 70, 0.15);
+    border-radius: 6px; overflow: visible; cursor: pointer; margin-bottom: 10px;
+    position: relative;
+  }
+  #track::before {
+    content: ''; position: absolute; inset: 0; border-radius: 6px; overflow: hidden;
+    background: rgba(60, 100, 70, 0.12);
+  }
+  #fill {
+    height: 100%; width: 0%; border-radius: 6px;
+    background: linear-gradient(90deg, #5ba870, #a8e6a0, #ffd56b);
+    background-size: 200% auto;
+    box-shadow: 0 0 14px rgba(120, 200, 130, 0.50);
+    transition: width 0.15s linear;
+    position: relative;
+    animation: fillShift 4s linear infinite;
+  }
+  @keyframes fillShift { to { background-position: -200% center; } }
+  #fill::after {
+    content: ''; position: absolute; right: -3px; top: 50%; transform: translateY(-50%);
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.9), 0 0 18px rgba(168,230,160,0.7);
+    opacity: 0; transition: opacity 0.25s ease;
+  }
+  #track:hover #fill::after { opacity: 1; }
+  #times {
+    display: flex; justify-content: space-between;
+    color: rgba(160, 220, 170, 0.35); font-size: 11px; letter-spacing: 1px;
+    margin-bottom: 24px;
+  }
+
+  /* 控制按钮 */
+  #controls {
+    display: flex; align-items: center; justify-content: center; gap: 22px;
+  }
+  .ctrl-btn {
+    width: 46px; height: 46px; border-radius: 50%; border: none; cursor: pointer;
+    background: rgba(50, 90, 60, 0.15); color: rgba(180, 230, 190, 0.65);
+    font-size: 16px; display: flex; align-items: center; justify-content: center;
+    transition: all 0.25s ease; position: relative; overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.04) inset;
+  }
+  .ctrl-btn:hover {
+    background: rgba(70, 130, 90, 0.28); color: #d8f0d8;
+    transform: scale(1.1);
+    box-shadow: 0 0 18px rgba(100, 200, 120, 0.35), 0 0 0 1px rgba(255,255,255,0.08) inset;
+  }
+  .ctrl-btn:active { transform: scale(0.94); }
+  .ripple {
+    position: absolute; border-radius: 50%; background: rgba(255,255,255,0.5);
+    transform: scale(0); animation: rippleAnim 0.6s ease-out forwards; pointer-events: none;
+  }
+  @keyframes rippleAnim { to { transform: scale(2.6); opacity: 0; } }
+  #playBtn {
+    width: 64px; height: 64px; font-size: 23px;
+    background: linear-gradient(135deg, #5ba870, #a8c070);
+    color: #fff; position: relative;
+    box-shadow: 0 4px 28px rgba(70, 140, 90, 0.4), 0 0 0 1px rgba(255,255,255,0.08) inset;
+  }
+  #playBtn:hover {
+    background: linear-gradient(135deg, #6bb880, #b8d080);
+    box-shadow: 0 4px 36px rgba(90, 160, 110, 0.55), 0 0 0 1px rgba(255,255,255,0.1) inset;
+    transform: scale(1.08);
+  }
+  #playBtn.playing::before, #playBtn.playing::after {
+    content: ''; position: absolute; inset: 0; border-radius: 50%;
+    border: 1.5px solid rgba(130, 220, 150, 0.55);
+    animation: pulseRing 2.2s ease-out infinite;
+    pointer-events: none;
+  }
+  #playBtn.playing::after { animation-delay: 1.1s; }
+  @keyframes pulseRing {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(1.9); opacity: 0; }
+  }
+
+  /* 音量 */
+  #volWrap {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 20px; justify-content: center;
+  }
+  #volIcon { color: rgba(160, 220, 170, 0.4); font-size: 14px; }
+  #vol {
+    width: 84px; height: 3px; -webkit-appearance: none; appearance: none;
+    background: rgba(60, 100, 70, 0.18); border-radius: 3px; outline: none;
+    transition: background 0.2s ease;
+  }
+  #vol:hover { background: rgba(60, 100, 70, 0.3); }
+  #vol::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
+    background: #a8e6a0; cursor: pointer; box-shadow: 0 0 8px rgba(168,230,160,0.6);
+    transition: box-shadow 0.2s ease;
+  }
+  #vol::-webkit-slider-thumb:hover { box-shadow: 0 0 14px rgba(168,230,160,0.9); }
+  #vol::-moz-range-thumb {
+    width: 13px; height: 13px; border-radius: 50%; border: none;
+    background: #a8e6a0; cursor: pointer; box-shadow: 0 0 8px rgba(168,230,160,0.6);
+  }
+
+  /* 歌词 */
+  #lyric {
+    position: fixed; left: 0; right: 0; bottom: 14%; text-align: center;
+    color: #e0f0d8; font-size: clamp(20px, 4.5vw, 38px); font-weight: 400; letter-spacing: 3px;
+    padding: 0 24px; z-index: 6; pointer-events: none;
+    opacity: 0; transform: translateY(16px) scale(0.97); filter: blur(5px);
+    transition: opacity 0.9s ease, transform 0.9s ease, filter 0.9s ease;
+    text-shadow: 0 0 22px rgba(140,220,150,0.5), 0 0 50px rgba(100,180,110,0.3);
+  }
+  #lyric.show { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  #lyricNext {
+    position: fixed; left: 0; right: 0; bottom: 7%; text-align: center;
+    color: rgba(180,220,180,0.35); font-size: clamp(13px, 2.8vw, 19px); letter-spacing: 2px;
+    padding: 0 24px; z-index: 6; pointer-events: none;
+    transition: opacity 0.7s ease;
+  }
+
+  /* 唤出提示 */
+  #hint {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    color: rgba(160, 220, 170, 0.25); font-size: 12px; letter-spacing: 4px;
+    z-index: 9; pointer-events: none; transition: opacity 0.5s ease;
+  }
+  #hint.fade { opacity: 0; }
+
+  /* 水印 */
+  #watermark {
+    position: fixed; right: 16px; bottom: 12px; z-index: 9;
+    color: rgba(160, 220, 170, 0.22); font-size: 10px; letter-spacing: 1px;
+    pointer-events: none; user-select: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="lyricNext"></div>
+<div id="lyric"></div>
+<div id="watermark">@震撼哥出品</div>
+
+<audio id="audio" preload="auto" src="heisemaoyi.mp3" loop crossorigin="anonymous"></audio>
+
+<script>
+/* ============================================================
+   夏夜草语 —— 助眠音乐播放器
+   夏夜草地背景 · 萤火虫 · 草地剪影 · 歌词粒子
+   ============================================================ */
+const canvas = document.getElementById('cv');
+const ctx = canvas.getContext('2d');
+let W, H, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize() {
+  W = innerWidth; H = innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+addEventListener('resize', resize); resize();
+
+/* ---- 草地剪影 ---- */
+let grassBlades = [];
+function initGrass() {
+  grassBlades = [];
+  const n = Math.round(W / 12);
+  for (let i = 0; i < n; i++) {
+    grassBlades.push({
+      x: (i / n) * W + (Math.random() - 0.5) * 14,
+      h: 30 + Math.random() * 80,
+      sway: Math.random() * Math.PI * 2,
+      swaySpeed: 0.3 + Math.random() * 0.5,
+      hue: 100 + Math.random() * 40,
+      lit: 0.15 + Math.random() * 0.2,
+      tilt: (Math.random() - 0.5) * 0.3
+    });
+  }
+}
+initGrass();
+addEventListener('resize', initGrass);
+
+function drawGrass(dt, energy) {
+  const t = performance.now() / 1000;
+  const baseY = H + 5;
+  for (const b of grassBlades) {
+    b.sway += dt * b.swaySpeed;
+    const swayX = Math.sin(b.sway) * 6 * (1 + energy.mid * 0.5);
+    const tipX = b.x + swayX + b.tilt * b.h;
+    const tipY = baseY - b.h;
+    ctx.strokeStyle = `hsla(${b.hue}, 50%, ${10 + b.lit * 100}%, ${0.4 + b.lit * 0.3})`;
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(b.x, baseY);
+    ctx.quadraticCurveTo(b.x + swayX * 0.5, baseY - b.h * 0.5, tipX, tipY);
+    ctx.stroke();
+  }
+}
+
+/* ---- 音频分析 ---- */
+const audioEl = document.getElementById('audio');
+let actx, analyser, freqData, timeData, srcNode;
+let audioReady = false;
+
+function setupAudio() {
+  if (audioReady) return;
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = actx.createAnalyser();
+  analyser.fftSize = 1024;
+  analyser.smoothingTimeConstant = 0.8;
+  freqData = new Uint8Array(analyser.frequencyBinCount);
+  timeData = new Uint8Array(analyser.fftSize);
+  srcNode = actx.createMediaElementSource(audioEl);
+  srcNode.connect(analyser);
+  analyser.connect(actx.destination);
+  audioReady = true;
+}
+
+function getEnergy() {
+  if (!audioReady || audioEl.paused) return { bass: 0, mid: 0, treble: 0, overall: 0 };
+  analyser.getByteFrequencyData(freqData);
+  const bins = analyser.frequencyBinCount;
+  let bass = 0, mid = 0, treble = 0;
+  const bassEnd = Math.floor(bins * 0.08);
+  const midEnd = Math.floor(bins * 0.3);
+  for (let i = 0; i < bassEnd; i++) bass += freqData[i];
+  for (let i = bassEnd; i < midEnd; i++) mid += freqData[i];
+  for (let i = midEnd; i < bins; i++) treble += freqData[i];
+  bass = bass / (bassEnd * 255);
+  mid = mid / ((midEnd - bassEnd) * 255);
+  treble = treble / ((bins - midEnd) * 255);
+  return { bass, mid, treble, overall: (bass + mid + treble) / 3 };
+}
+
+/* ---- 萤火虫 (增强版) ---- */
+const fireflies = [];
+function initFireflies() {
+  fireflies.length = 0;
+  const n = 50;
+  for (let i = 0; i < n; i++) {
+    fireflies.push({
+      x: Math.random() * W, y: Math.random() * H * 0.85,
+      vx: (Math.random() - 0.5) * 12,
+      vy: (Math.random() - 0.5) * 8,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.3 + Math.random() * 0.8,
+      r: 1 + Math.random() * 1.8,
+      hue: 55 + Math.random() * 25,
+      blinkDur: 2 + Math.random() * 4,
+      blinkTimer: Math.random() * 5,
+      brightness: 0
+    });
+  }
+}
+initFireflies();
+addEventListener('resize', initFireflies);
+
+function drawFireflies(dt, energy) {
+  const t = performance.now() / 1000;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const f of fireflies) {
+    f.x += f.vx * dt;
+    f.y += f.vy * dt;
+    f.phase += dt * f.speed;
+    // 缓慢游荡
+    f.vx += (Math.random() - 0.5) * 6 * dt;
+    f.vy += (Math.random() - 0.5) * 4 * dt;
+    f.vx = Math.max(-15, Math.min(15, f.vx));
+    f.vy = Math.max(-10, Math.min(10, f.vy));
+    // 边界回绕
+    if (f.x < -10) f.x = W + 10;
+    if (f.x > W + 10) f.x = -10;
+    if (f.y < -10) f.y = H * 0.9;
+    if (f.y > H * 0.9) f.y = -10;
+    // 闪烁逻辑
+    f.blinkTimer -= dt;
+    if (f.blinkTimer <= 0) {
+      f.blinkTimer = f.blinkDur;
+    }
+    const blinkPhase = f.blinkTimer / f.blinkDur;
+    const blink = Math.sin(blinkPhase * Math.PI);
+    const glow = (0.2 + 0.8 * (0.5 + 0.5 * Math.sin(f.phase))) * blink;
+    const pulse = 1 + energy.overall * 0.5;
+    const a = glow * pulse;
+    const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * 8);
+    g.addColorStop(0, `hsla(${f.hue}, 90%, 70%, ${a * 0.5})`);
+    g.addColorStop(0.4, `hsla(${f.hue}, 85%, 60%, ${a * 0.15})`);
+    g.addColorStop(1, `hsla(${f.hue}, 80%, 50%, 0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r * 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `hsla(${f.hue}, 95%, 85%, ${a * 0.9})`;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 萤火虫占位 (已移至上方) ---- */
+
+/* ---- 月亮已移除 ---- */
+
+/* ---- 背景: 夏夜草地 ---- */
+function drawBackground() {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#0a1814');
+  g.addColorStop(0.3, '#0c1e16');
+  g.addColorStop(0.6, '#0a1a12');
+  g.addColorStop(0.85, '#081410');
+  g.addColorStop(1, '#050a08');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // 远处暖色微光 (夏夜氛围)
+  ctx.globalCompositeOperation = 'lighter';
+  const t = performance.now() / 1000;
+  const glows = [
+    { h: 80, ox: -0.2, oy: -0.15, alpha: 0.03 },
+    { h: 50, ox: 0.2, oy: 0.1, alpha: 0.025 },
+    { h: 120, ox: 0.0, oy: -0.2, alpha: 0.02 }
+  ];
+  for (let i = 0; i < glows.length; i++) {
+    const c = glows[i];
+    const bx = W * 0.5 + Math.cos(t * 0.03 + i * 2) * W * 0.12 + W * c.ox;
+    const by = H * 0.4 + Math.sin(t * 0.02 + i * 1.5) * H * 0.08 + H * c.oy;
+    const rad = Math.min(W, H) * 0.4;
+    const rg = ctx.createRadialGradient(bx, by, 0, bx, by, rad);
+    rg.addColorStop(0, `hsla(${c.h}, 60%, 50%, ${c.alpha})`);
+    rg.addColorStop(0.6, `hsla(${c.h}, 50%, 40%, ${c.alpha * 0.3})`);
+    rg.addColorStop(1, 'hsla(0,0%,0%,0)');
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.arc(bx, by, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // 底部草地暗影渐变
+  const groundG = ctx.createLinearGradient(0, H * 0.7, 0, H);
+  groundG.addColorStop(0, 'rgba(5, 15, 10, 0)');
+  groundG.addColorStop(1, 'rgba(3, 8, 5, 0.6)');
+  ctx.fillStyle = groundG;
+  ctx.fillRect(0, H * 0.7, W, H * 0.3);
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 星星绘制已移除 ---- */
+
+/* ---- 歌词 ---- */
+let lyrics = [], curLyric = -1;
+const lyricEl = document.getElementById('lyric');
+const lyricNextEl = document.getElementById('lyricNext');
+
+async function loadLyrics() {
+  try {
+    const text = await (await fetch('heisemaoyi.lrc')).text();
+    const skip = ['词：', '曲：', '编曲', '制作', '人：', '和声', '混音', '母带', '监制'];
+    const re = /\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\](.*)/;
+    lyrics = text.split(/\r?\n/).map(l => {
+      const m = l.match(re); if (!m) return null;
+      const t = m[4].trim(); if (!t || skip.some(s => t.includes(s))) return null;
+      const frac = m[3] ? parseInt(m[3].padEnd(3, '0'), 10) / 1000 : 0;
+      return { time: +m[1] * 60 + +m[2] + frac, text: t };
+    }).filter(Boolean).sort((a, b) => a.time - b.time);
+  } catch (e) { lyrics = []; }
+}
+
+function updateLyrics(t) {
+  if (!lyrics.length) return;
+  let idx = -1;
+  for (let i = 0; i < lyrics.length; i++) {
+    if (t >= lyrics[i].time) idx = i; else break;
+  }
+  if (idx !== curLyric) {
+    curLyric = idx;
+    const lineStart = idx >= 0 ? lyrics[idx].time : 0;
+    const lineEnd = (idx + 1 < lyrics.length) ? lyrics[idx + 1].time : lineStart + 5;
+    setLyricText(idx >= 0 ? lyrics[idx].text : '', lineStart, lineEnd);
+    lyricNextEl.textContent = (idx + 1 < lyrics.length) ? lyrics[idx + 1].text : '';
+  }
+}
+
+loadLyrics();
+
+/* ---- 星星拼歌词特效 ---- */
+const lyricCanvas = document.createElement('canvas');
+const lyricCtx = lyricCanvas.getContext('2d');
+const PARTICLES_PER_CHAR = 400;
+const MAX_PARTICLE_COUNT = 5000;
+const LYRIC_COLORS = ['#a8e6a0', '#d4f0c0', '#ffd56b', '#6bcf7f', '#b8e6a0', '#c0e890', '#e8d870', '#90d8a0', '#a0e8b0', '#d0e880', '#f0e0a0', '#80c890'];
+let lyricParticles = [];
+let activeParticleCount = 0;
+
+// 预渲染辉光精灵图，避免每帧创建数千个径向渐变
+const glowSpriteSize = 32;
+const glowCanvas = document.createElement('canvas');
+glowCanvas.width = glowSpriteSize;
+glowCanvas.height = glowSpriteSize;
+const glowCtx = glowCanvas.getContext('2d');
+const glowGrad = glowCtx.createRadialGradient(glowSpriteSize / 2, glowSpriteSize / 2, 0, glowSpriteSize / 2, glowSpriteSize / 2, glowSpriteSize / 2);
+glowGrad.addColorStop(0, '#fff');
+glowGrad.addColorStop(1, 'transparent');
+glowCtx.fillStyle = glowGrad;
+glowCtx.fillRect(0, 0, glowSpriteSize, glowSpriteSize);
+let lyricStarActive = false;
+let lyricStarOpacity = 0;
+let lyricPhase = 'idle';
+let pendingCharTargets = null;
+let disperseTimer = 0;
+let currentCharTargets = [];
+let currentLineStart = 0;
+let currentLineEnd = 0;
+let currentTotalChars = 0;
+const DISPERSE_DURATION = 0.1;
+
+function initLyricParticles() {
+  lyricParticles = [];
+  for (let i = 0; i < MAX_PARTICLE_COUNT; i++) {
+    lyricParticles.push({
+      x: Math.random() * W, y: Math.random() * H,
+      hx: Math.random() * W, hy: Math.random() * H,
+      tx: 0, ty: 0, hasTarget: false,
+      tw: Math.random() * Math.PI * 2,
+      tws: 0.5 + Math.random() * 1.5,
+      r: 0.8 + Math.random() * 0.6,
+      color: LYRIC_COLORS[(Math.random() * LYRIC_COLORS.length) | 0],
+      formEase: 0.35,
+      disperseEase: 0.6,
+      revealIdx: -1
+    });
+  }
+}
+initLyricParticles();
+
+function getTextTargetsPerChar(text) {
+  if (!text) return [];
+  const segments = text.split(/\s+/).filter(s => s.length > 0);
+  let fontSize = Math.min(W * 0.12, H * 0.14, 78);
+  const colGap = 20;
+  const maxTotalW = W * 0.85;
+  lyricCtx.font = `400 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
+  let charW = lyricCtx.measureText('一').width;
+  while ((charW + colGap) * segments.length > maxTotalW && fontSize > 20) {
+    fontSize -= 2;
+    lyricCtx.font = `400 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
+    charW = lyricCtx.measureText('一').width;
+  }
+  const lineH = Math.ceil(fontSize * 1.25);
+  const colW = Math.ceil(charW) + colGap;
+  const maxColChars = Math.max(...segments.map(s => [...s].length));
+  const th = lineH * maxColChars;
+  const tw = colW * segments.length;
+  lyricCanvas.width = tw;
+  lyricCanvas.height = th;
+  lyricCtx.font = `400 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
+  lyricCtx.fillStyle = '#fff';
+  lyricCtx.textBaseline = 'middle';
+  lyricCtx.textAlign = 'center';
+  const charList = [];
+  for (let col = 0; col < segments.length; col++) {
+    const chars = [...segments[col]];
+    for (let i = 0; i < chars.length; i++) {
+      charList.push({ char: chars[i], col, row: i });
+    }
+  }
+  const charTargets = [];
+  for (const c of charList) {
+    lyricCtx.clearRect(0, 0, tw, th);
+    const colX = (segments.length - 1 - c.col) * colW + colW / 2;
+    lyricCtx.fillText(c.char, colX, lineH * c.row + lineH / 2);
+    const imgData = lyricCtx.getImageData(0, 0, tw, th);
+    const targets = [];
+    const step = 2;
+    for (let y = 0; y < th; y += step) {
+      for (let x = 0; x < tw; x += step) {
+        const idx = (y * tw + x) * 4;
+        if (imgData.data[idx + 3] > 128) {
+          targets.push({ x: x - tw / 2, y: y - th / 2 });
+        }
+      }
+    }
+    charTargets.push(targets);
+  }
+  return charTargets;
+}
+
+function assignTargetsWithReveal(charTargets) {
+  const allTargets = [];
+  for (let i = 0; i < charTargets.length; i++) {
+    for (const t of charTargets[i]) {
+      allTargets.push({ x: t.x, y: t.y, charIdx: i });
+    }
+  }
+  
+  // 动态计算需要的粒子数
+  activeParticleCount = Math.min(allTargets.length, MAX_PARTICLE_COUNT);
+
+  if (!allTargets.length) {
+    lyricStarActive = false;
+    return;
+  }
+  
+  for (let i = allTargets.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [allTargets[i], allTargets[j]] = [allTargets[j], allTargets[i]];
+  }
+  const cx = W / 2;
+  const cy = H * 0.5;
+  for (let i = 0; i < activeParticleCount; i++) {
+    lyricParticles[i].tx = allTargets[i].x + cx;
+    lyricParticles[i].ty = allTargets[i].y + cy;
+    lyricParticles[i].revealIdx = allTargets[i].charIdx;
+    lyricParticles[i].hasTarget = false;
+  }
+  lyricStarActive = true;
+}
+
+function setLyricText(text, lineStart, lineEnd) {
+  if (!text) {
+    lyricStarActive = false;
+    lyricPhase = 'idle';
+    currentCharTargets = [];
+    currentTotalChars = 0;
+    activeParticleCount = 0;
+    return;
+  }
+  const charTargets = getTextTargetsPerChar(text);
+  currentLineStart = lineStart;
+  currentLineEnd = lineEnd;
+  currentTotalChars = charTargets.length;
+  if (lyricPhase === 'forming') {
+    for (let i = 0; i < activeParticleCount; i++) {
+      const p = lyricParticles[i];
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * Math.min(W, H) * 0.3;
+      p.hx = p.x + Math.cos(angle) * dist;
+      p.hy = p.y + Math.sin(angle) * dist;
+      p.hasTarget = false;
+      p.revealIdx = -1;
+    }
+    pendingCharTargets = charTargets;
+    lyricPhase = 'dispersing';
+    disperseTimer = DISPERSE_DURATION;
+  } else {
+    currentCharTargets = charTargets;
+    assignTargetsWithReveal(charTargets);
+    lyricPhase = 'forming';
+  }
+}
+
+function drawLyricStars(dt, energy) {
+  const t = performance.now() / 1000;
+  if (lyricPhase === 'dispersing') {
+    disperseTimer -= dt;
+    if (disperseTimer <= 0) {
+      currentCharTargets = pendingCharTargets;
+      assignTargetsWithReveal(pendingCharTargets);
+      pendingCharTargets = null;
+      lyricPhase = 'forming';
+    }
+  }
+  if (lyricPhase === 'forming' && currentTotalChars > 0) {
+    const audioT = audioEl.currentTime;
+    const lineDur = currentLineEnd - currentLineStart;
+    const revealDur = lineDur >= 10 ? 2 : Math.max(0.5, lineDur * 0.8);
+    const progress = Math.max(0, Math.min(1, (audioT - currentLineStart) / revealDur));
+    const numRevealed = Math.ceil(progress * currentTotalChars);
+    for (let i = 0; i < activeParticleCount; i++) {
+      const p = lyricParticles[i];
+      if (p.revealIdx >= 0 && p.revealIdx < numRevealed) {
+        p.hasTarget = true;
+      }
+    }
+  }
+  const targetOpacity = (lyricPhase === 'forming' || lyricPhase === 'dispersing') ? 1 : 0;
+  lyricStarOpacity += (targetOpacity - lyricStarOpacity) * 0.04;
+  if (lyricStarOpacity < 0.01) return;
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < activeParticleCount; i++) {
+    const p = lyricParticles[i];
+    const targetX = p.hasTarget ? p.tx : p.hx;
+    const targetY = p.hasTarget ? p.ty : p.hy;
+    const ease = p.hasTarget ? p.formEase : p.disperseEase;
+    p.x += (targetX - p.x) * ease;
+    p.y += (targetY - p.y) * ease;
+    let px = p.x, py = p.y;
+    if (!p.hasTarget) {
+      const danceAmp = 4 + energy.overall * 30 + energy.bass * 20;
+      const danceAmpY = 3 + energy.mid * 22 + energy.treble * 12;
+      px += Math.sin(t * p.tws * 1.5 + p.tw) * danceAmp;
+      py += Math.cos(t * p.tws * 1.2 + p.tw) * danceAmpY;
+    }
+    const tw = 0.6 + 0.4 * Math.sin(t * p.tws + p.tw);
+    const forming = p.hasTarget ? lyricStarOpacity : lyricStarOpacity * 0.2;
+    const pulse = p.hasTarget ? 1 : (1 + energy.overall * 0.8 + energy.bass * 0.4);
+    const a = Math.min(1, (0.6 + tw * 0.35) * forming * pulse);
+    const r = p.r * (1 + tw * 0.1) * (p.hasTarget ? 1 : (1 + energy.treble * 0.3));
+    const glowR = r * 2.5;
+    // 使用预渲染辉光精灵图替代径向渐变
+    ctx.globalAlpha = a * 0.85;
+    ctx.drawImage(glowCanvas, px - glowR, py - glowR, glowR * 2, glowR * 2);
+    // 核心光点
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = Math.min(1, a + 0.45);
+    const cr = r * 1.1;
+    ctx.fillRect(px - cr, py - cr, cr * 2, cr * 2);
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function lyricStarResize() {
+  for (const p of lyricParticles) {
+    p.hx = Math.random() * W;
+    p.hy = Math.random() * H;
+  }
+  if (curLyric >= 0 && lyrics[curLyric]) {
+    const lineStart = lyrics[curLyric].time;
+    const lineEnd = (curLyric + 1 < lyrics.length) ? lyrics[curLyric + 1].time : lineStart + 5;
+    setLyricText(lyrics[curLyric].text, lineStart, lineEnd);
+  }
+}
+addEventListener('resize', lyricStarResize);
+
+/* ---- 参天大树 (随风摇曳, 枝繁叶茂) ---- */
+let treeSwayPhase = 0;
+function drawBranch(x, y, ang, len, w, depth, swayPhase, windPower, energy) {
+  if (depth <= 0 || len < 3) return;
+  const sway = Math.sin(swayPhase + ang * 2) * (2 + depth * 1.5) * windPower;
+  const ex = x + Math.cos(ang) * len + sway;
+  const ey = y + Math.sin(ang) * len;
+  const lightness = 6 + depth * 1.5 + energy.bass * 4;
+  ctx.strokeStyle = `hsla(30, 35%, ${lightness}%, ${0.35 + depth * 0.04})`;
+  ctx.lineWidth = w;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.quadraticCurveTo((x + ex) / 2 + sway * 0.4, (y + ey) / 2, ex, ey);
+  ctx.stroke();
+  // 递归子枝
+  const nSub = depth > 3 ? 3 : 2;
+  for (let i = 0; i < nSub; i++) {
+    const spread = 0.5 + (3 - depth) * 0.15;
+    const childAng = ang + (i - (nSub - 1) / 2) * spread + (Math.random() - 0.5) * 0.1;
+    const childLen = len * (0.62 + Math.random() * 0.12);
+    const childW = w * 0.62;
+    drawBranch(ex, ey, childAng, childLen, childW, depth - 1, swayPhase + 0.3, windPower, energy);
+  }
+}
+
+function drawLeafCluster(cx, cy, r, hue, alpha, swayPhase, windPower, energy) {
+  const sx = cx + Math.sin(swayPhase) * 4 * windPower;
+  const sy = cy + Math.cos(swayPhase * 0.8) * 3 * windPower;
+  const rr = r * (1 + energy.overall * 0.06);
+  const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, rr);
+  g.addColorStop(0, `hsla(${hue}, 50%, ${18 + energy.bass * 8}%, ${alpha})`);
+  g.addColorStop(0.5, `hsla(${hue}, 45%, 12%, ${alpha * 0.5})`);
+  g.addColorStop(1, `hsla(${hue}, 40%, 8%, 0)`);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(sx, sy, rr, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawTree(dt, energy) {
+  treeSwayPhase += dt * 0.4;
+  const baseY = H + 5;
+  const trunkX = W * 0.12;
+  const trunkH = Math.min(H * 0.75, 520);
+  const trunkW = Math.max(14, trunkH * 0.05);
+  const windPower = 1 + energy.mid * 0.6;
+
+  // 树干 (微弯, 从底部向上)
+  const trunkBend = Math.sin(treeSwayPhase * 0.2) * 5 * windPower;
+  ctx.strokeStyle = `hsla(28, 35%, ${6 + energy.bass * 4}%, 0.55)`;
+  ctx.lineWidth = trunkW;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(trunkX, baseY);
+  ctx.quadraticCurveTo(trunkX + trunkBend * 0.4, baseY - trunkH * 0.5, trunkX + trunkBend * 0.8, baseY - trunkH * 0.65);
+  ctx.stroke();
+
+  // 树干上半段渐细
+  const midX = trunkX + trunkBend * 0.8;
+  const midY = baseY - trunkH * 0.65;
+  const topBend = Math.sin(treeSwayPhase * 0.25) * 4 * windPower;
+  const topX = midX + topBend;
+  const topY = baseY - trunkH;
+  ctx.lineWidth = trunkW * 0.6;
+  ctx.beginPath();
+  ctx.moveTo(midX, midY);
+  ctx.quadraticCurveTo((midX + topX) / 2 + topBend * 0.3, (midY + topY) / 2, topX, topY);
+  ctx.stroke();
+
+  // 递归树枝系统 (从树顶向上向外展开)
+  const mainBranches = [
+    { ang: -Math.PI / 2 - 0.5, len: trunkH * 0.3, w: trunkW * 0.5, depth: 5 },
+    { ang: -Math.PI / 2 + 0.5, len: trunkH * 0.32, w: trunkW * 0.55, depth: 5 },
+    { ang: -Math.PI / 2 - 0.15, len: trunkH * 0.35, w: trunkW * 0.6, depth: 5 },
+    { ang: -Math.PI / 2 + 0.2, len: trunkH * 0.28, w: trunkW * 0.45, depth: 4 },
+    { ang: -Math.PI / 2 - 0.8, len: trunkH * 0.25, w: trunkW * 0.4, depth: 4 },
+    { ang: -Math.PI / 2 + 0.8, len: trunkH * 0.26, w: trunkW * 0.42, depth: 4 }
+  ];
+  for (const b of mainBranches) {
+    drawBranch(topX, topY, b.ang, b.len, b.w, b.depth, treeSwayPhase, windPower, energy);
+  }
+
+  // 树冠 (大量叶团, 层层叠叠)
+  ctx.globalCompositeOperation = 'lighter';
+  const crownR = trunkH * 0.28;
+  const crownCx = topX + Math.sin(treeSwayPhase * 0.3) * 8 * windPower;
+  const crownCy = topY - crownR * 0.25;
+  const leafClusters = [
+    // 中心大叶团
+    { dx: 0, dy: 0, r: crownR, hue: 110, alpha: 0.14 },
+    { dx: -crownR * 0.4, dy: crownR * 0.05, r: crownR * 0.8, hue: 120, alpha: 0.12 },
+    { dx: crownR * 0.4, dy: crownR * 0.1, r: crownR * 0.75, hue: 100, alpha: 0.12 },
+    // 上层
+    { dx: -crownR * 0.15, dy: -crownR * 0.35, r: crownR * 0.7, hue: 115, alpha: 0.11 },
+    { dx: crownR * 0.25, dy: -crownR * 0.3, r: crownR * 0.65, hue: 105, alpha: 0.10 },
+    { dx: -crownR * 0.3, dy: -crownR * 0.5, r: crownR * 0.55, hue: 118, alpha: 0.09 },
+    { dx: crownR * 0.1, dy: -crownR * 0.55, r: crownR * 0.5, hue: 108, alpha: 0.08 },
+    // 下层
+    { dx: 0, dy: crownR * 0.35, r: crownR * 0.6, hue: 125, alpha: 0.09 },
+    { dx: -crownR * 0.5, dy: crownR * 0.3, r: crownR * 0.5, hue: 120, alpha: 0.08 },
+    { dx: crownR * 0.5, dy: crownR * 0.35, r: crownR * 0.5, hue: 110, alpha: 0.08 },
+    // 外围散叶
+    { dx: -crownR * 0.6, dy: -crownR * 0.15, r: crownR * 0.45, hue: 112, alpha: 0.07 },
+    { dx: crownR * 0.6, dy: -crownR * 0.1, r: crownR * 0.42, hue: 103, alpha: 0.07 },
+    { dx: -crownR * 0.35, dy: crownR * 0.5, r: crownR * 0.4, hue: 122, alpha: 0.06 },
+    { dx: crownR * 0.35, dy: crownR * 0.5, r: crownR * 0.38, hue: 113, alpha: 0.06 },
+    { dx: 0, dy: -crownR * 0.7, r: crownR * 0.35, hue: 116, alpha: 0.06 },
+    { dx: -crownR * 0.7, dy: crownR * 0.15, r: crownR * 0.32, hue: 106, alpha: 0.05 },
+    { dx: crownR * 0.7, dy: crownR * 0.2, r: crownR * 0.3, hue: 118, alpha: 0.05 }
+  ];
+  for (const c of leafClusters) {
+    const cx = crownCx + c.dx;
+    const cy = crownCy + c.dy;
+    const sp = treeSwayPhase * 0.5 + c.dx * 0.008 + c.dy * 0.006;
+    drawLeafCluster(cx, cy, c.r, c.hue, c.alpha, sp, windPower, energy);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 主循环 ---- */
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000) || 0;
+  last = now;
+  const energy = getEnergy();
+  drawBackground();
+  drawTree(dt, energy);
+  drawLyricStars(dt, energy);
+  drawFireflies(dt, energy);
+  drawGrass(dt, energy);
+  updateLyrics(audioEl.currentTime);
+  document.documentElement.style.setProperty('--bass', energy.bass.toFixed(3));
+  document.documentElement.style.setProperty('--mid', energy.mid.toFixed(3));
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ============================================================
+   播放器逻辑
+   ============================================================ */
+const audio = document.getElementById('audio');
+
+audio.volume = 1;
+
+function fmt(s) {
+  if (!isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60), ss = Math.floor(s % 60);
+  return m + ':' + String(ss).padStart(2, '0');
+}
+
+// 页面打开即播放，循环播放
+function autoPlay() {
+  if (!audioReady) setupAudio();
+  if (actx && actx.state === 'suspended') actx.resume();
+  audio.play().catch(e => console.warn(e));
+}
+autoPlay();
+</script>
+</body>
+</html>
